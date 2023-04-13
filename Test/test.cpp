@@ -1,10 +1,7 @@
 #include "pch.h"
 
-//#include <string.h>
-//#include <assert.h>
-//#include <math.h>
- #include <stdlib.h>
-#include <fstream>
+#include <assert.h>
+#include <stdlib.h>
 
 extern "C"
 {
@@ -19,6 +16,7 @@ typedef struct {
 typedef struct {
     char name[10];
 } Key;
+
 
 static int compare(const void* lhsp, const void* rhsp) {
     const Key* lhs = (const Key*)lhsp;
@@ -40,6 +38,69 @@ static int compare_int(const void* a, const void* b) {
         return -1;
     }
     //return *arg1 > *arg2 ? 1 : *arg1 == *arg2 ? 0 : -1;
+}
+
+
+typedef struct _KeyMy
+{
+    char* name;
+} KeyMy;
+
+typedef struct _ValueMy
+{
+    int* array;
+} ValueMy;
+
+void build_key(KeyMy* key) {
+    key->name = (char*)malloc(sizeof(char) * 10);
+}
+
+void init_key(KeyMy* key, int index) {
+    build_key(key);
+    std::string str;
+    str.append("Key" + std::to_string(index));
+
+
+    for (int i = 0; i < 10; i++) {
+        if (i < str.size()) {
+            key->name[i] = str[i];
+        }
+        else {
+            key->name[i] = '\0';
+        }
+    }
+}
+
+void free_key(KeyMy* key) {
+    free(key->name);
+}
+
+void build_value(ValueMy* value) {
+    value->array = (int*)malloc(sizeof(int) * 10);
+}
+
+void init_value(ValueMy* value) {
+    build_value(value);
+    for (int i = 0; i < 10; i++) {
+        value->array[i] = rand() % 100;
+    }
+}
+
+void free_value(ValueMy* value) {
+    free(value->array);
+}
+
+void destroy(void* _item) {
+    BTreeItem* item = (BTreeItem*)_item;
+    free_key((KeyMy*)item->key);
+    free_value((ValueMy*)item->value);
+}
+
+static int compare_(const void* lhsp, const void* rhsp) {
+    const KeyMy* lhs = (const KeyMy*)lhsp;
+    const KeyMy* rhs = (const KeyMy*)rhsp;
+
+    return strcmp(lhs->name, rhs->name);
 }
 
 TEST(TestExample, Test) {
@@ -154,7 +215,7 @@ TEST(EmergencySituation_btree_init, Test_1) {
     }
 
     //btree with new parametres
-    btree = btree_init(btree, sizeof(int), sizeof(int), compare_int, NULL);
+    EXPECT_TRUE(btree_init(btree, sizeof(int), sizeof(int), compare_int, NULL) != NULL);
 
     int key_new = 5;
     int value_new = 12;
@@ -165,7 +226,6 @@ TEST(EmergencySituation_btree_init, Test_1) {
         *insertedValue_new = value_new;
     }
     
-    EXPECT_TRUE(btree != NULL);
     EXPECT_TRUE(btree_stop(btree) != btree_first(btree));
 
     btree_destroy(btree, NULL);
@@ -177,11 +237,8 @@ TEST(EmergencySituation_btree_init, Test_2) {
     //btree with old parametres
     void* btree = btree_create(sizeof(Key), sizeof(Value), compare);
 
-    //btree with new parametres
-    btree = btree_init(btree, NULL, sizeof(int), compare_int, NULL);
-
     //have not been changes
-    EXPECT_TRUE(NULL == btree);
+    EXPECT_TRUE(NULL == btree_init(btree, NULL, sizeof(int), compare_int, NULL));
     btree_destroy(btree, NULL);
 }
 
@@ -189,11 +246,8 @@ TEST(EmergencySituation_btree_init, Test_3) {
     //btree with old parametres
     void* btree = btree_create(sizeof(Key), sizeof(Value), compare);
 
-    //btree with new parametres
-    btree = btree_init(btree, sizeof(int), NULL, compare_int, NULL);
-
     //have not been changes
-    EXPECT_TRUE(NULL == btree);
+    EXPECT_TRUE(NULL == btree_init(btree, sizeof(int), NULL, compare_int, NULL));
     btree_destroy(btree, NULL);
 }
 
@@ -201,11 +255,8 @@ TEST(EmergencySituation_btree_init, Test_4) {
     //btree with old parametres
     void* btree = btree_create(sizeof(Key), sizeof(Value), compare);
 
-    //btree with new parametres
-    btree = btree_init(btree, sizeof(int), sizeof(int), NULL, NULL);
-
     //have not been changes
-    EXPECT_TRUE(NULL == btree);
+    EXPECT_TRUE(NULL == btree_init(btree, sizeof(int), sizeof(int), NULL, NULL));
     btree_destroy(btree, NULL);
 }
 
@@ -860,6 +911,7 @@ TEST(EmergencySituation_btree_remove_and_insert, Test_1) {
     int key = 0;
     int count_elem = 100;
     int* data_set = (int*)calloc(count_elem, sizeof(int));
+    if (data_set == NULL) assert(false);
 
 
     for (int i = 0; i < count_elem; i++) {
@@ -896,71 +948,6 @@ TEST(EmergencySituation_btree_remove_and_insert, Test_1) {
     free(data_set);
 }
 
-namespace
-{
-    typedef struct _KeyMy
-    {
-        char* name;
-    } KeyMy;
-
-    typedef struct _ValueMy
-    {
-        int* array;
-    } ValueMy;
-
-    void build_key(KeyMy* key) {
-        key->name = (char*)malloc(sizeof(char) * 10);
-    }
-
-    void init_key(KeyMy* key, int index) {
-        build_key(key);
-        std::string str;
-        str.append("Key" + std::to_string(index));
-
-
-        for (int i = 0; i < 10; i++) {
-            if (i < str.size()) {
-                key->name[i] = str[i];
-            }
-            else {
-                key->name[i] = '\0';
-            }
-        }
-    }
-
-    void free_key(KeyMy* key) {
-        free(key->name);
-    }
-
-    void build_value(ValueMy* value) {
-        value->array = (int*)malloc(sizeof(int) * 10);
-    }
-
-    void init_value(ValueMy* value) {
-        build_value(value);
-        for (int i = 0; i < 10; i++) {
-            value->array[i] = rand() % 100;
-        }
-    }
-
-    void free_value(ValueMy* value) {
-        free(value->array);
-    }
-
-    void destroy(void* _item) {
-        BTreeItem* item = (BTreeItem*)_item;
-        free_key((KeyMy*)item->key);
-        free_value((ValueMy*)item->value);
-    }
-
-    static int compare_(const void* lhsp, const void* rhsp) {
-        const KeyMy* lhs = (const KeyMy*)lhsp;
-        const KeyMy* rhs = (const KeyMy*)rhsp;
-
-        return strcmp(lhs->name, rhs->name);
-    }
-}
-
 TEST(EmergencySituation_btree_remove_and_insert, Test_2) {
     void* btree = btree_create(sizeof(ValueMy), sizeof(KeyMy), compare_);
     bool isCreated = false;
@@ -969,16 +956,7 @@ TEST(EmergencySituation_btree_remove_and_insert, Test_2) {
     int count_elem = 10;
     ValueMy* insertedValue;
     KeyMy* data_set = (KeyMy*)calloc(count_elem, sizeof(KeyMy));
-    if (data_set == NULL) {
-        exit(1);
-    }
-
-    std::ofstream out;
-    out.open("result.txt");
-    if (!out.is_open()) {
-        exit(1);
-    }
-
+    if (data_set == NULL) assert(false);
 
     for (int i = 0; i < count_elem; i++) {
         KeyMy key;
@@ -994,7 +972,6 @@ TEST(EmergencySituation_btree_remove_and_insert, Test_2) {
             init_value(insertedValue);
             init_key((data_set + i), index);
             count++;
-            out << index << std::endl;
         }
         isCreated = false;
     }

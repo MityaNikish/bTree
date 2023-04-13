@@ -21,8 +21,7 @@ struct BTree {
     int(*comp)(const void*, const void*);
 };
 
-static void* build_node(const void* btree, const void* key) {
-    const BTree* tree = btree;
+static void* build_node(const BTree* tree, const void* key) {
     if ((tree == NULL) || (key == NULL)) {
         return NULL;
     }
@@ -32,25 +31,28 @@ static void* build_node(const void* btree, const void* key) {
     }
     node->Item = (BTreeItem*)malloc(sizeof(BTreeItem));
     if (node->Item == NULL) {
+        free(node);
         return NULL;
     }
     node->Item->value = malloc(tree->valueSize);
     node->Item->key = malloc(tree->keySize);
-    if ((node->Item->value != NULL) && (node->Item->key != NULL)) {
-        memcpy(node->Item->key, key, tree->keySize);
+    if ((node->Item->value == NULL) || (node->Item->key == NULL)) {
+        free(node->Item);
+        free(node);
+        return NULL;
     }
+    memcpy((void*)node->Item->key, key, tree->keySize);
     return node;
 }
 
-static void* traversal_tree(void* _node, const void* key, int(*compare)(const void*, const void*), bool* Flag) {
-    BTreeNode* node = (BTreeNode*)_node;
+static void* traversal_tree(BTreeNode* node, const void* key, int(*compare)(const void*, const void*), bool* Flag) {
     if ((node == NULL) || (key == NULL) || (Flag == NULL) || (compare == NULL)) {
         return NULL;
     }
-    int route;
+
     while (true)
     {
-        route = compare(node->Item->key, key);
+        int route = compare(node->Item->key, key);
         if (route == 0) {
             *Flag = true;
             return node;
@@ -70,58 +72,34 @@ static void* traversal_tree(void* _node, const void* key, int(*compare)(const vo
     }
 }
 
-static void delete_node(void* _node, void(*destroy)(void*)) {
-    if (_node == NULL) {
-        return;
-    }
-    BTreeNode* node = _node;
+static void delete_node(BTreeNode* node, void(*destroy)(void*)) {
+    if (node == NULL) return;
     if (destroy != NULL) {
         destroy(node->Item);
     }
-    free(node->Item->key);
+    free((void*)node->Item->key);
     free(node->Item->value);
     free(node->Item);
     free(node);
 }
 
-static void* leftmostNode(void* _node) {
-    if (_node == NULL) {
-        return NULL;
-    }
-    BTreeNode* node = (BTreeNode*)_node;
+static void* leftmost_node(BTreeNode*  node) {
+    if (node == NULL) return NULL;
     while (node->LeftNode != NULL) {
         node = node->LeftNode;
     }
     return node;
 }
 
-static void* rightmostNode(void* _node) {
-    if (_node == NULL) {
-        return NULL;
-    }
-    BTreeNode* node = (BTreeNode*)_node;
+static void* rightmost_node(BTreeNode* node) {
+    if (node == NULL) return NULL;
     while(node->RightNode != NULL) {
         node = node->RightNode;
     }
     return node;
 }
 
-static void sheet(BTreeNode* node, int(*compare)(const void*, const void*), void(*destroy)(void*)) {
-    if ((node->LeftNode == NULL) && (node->RightNode == NULL)) {
-        if (node->ParentNode != NULL) {
-            int meaning = compare(node->ParentNode->Item->key, node->Item->key);
-            if (meaning <= 0) {
-                node->ParentNode->RightNode = NULL;
-            }
-            else {
-                node->ParentNode->LeftNode = NULL;
-            };
-        }
-        delete_node(node, destroy);
-    }
-}
-
-static void decoupling_sheet(BTreeNode* node, int(*compare)(const void*, const void*)) {
+static void decoupling_leaf(BTreeNode* node, int(*compare)(const void*, const void*)) {
     if (node->ParentNode != NULL) {
         int meaning = compare(node->ParentNode->Item->key, node->Item->key);
         if (meaning <= 0) {
@@ -133,70 +111,49 @@ static void decoupling_sheet(BTreeNode* node, int(*compare)(const void*, const v
     }
 }
 
-static void decoupling_node_path_right(BTreeNode* node, int(*compare)(const void*, const void*), BTree* tree) {
-    if (node->ParentNode != NULL) {
-        int meaning = compare(node->ParentNode->Item->key, node->Item->key);
+static void decoupling_node_path(BTreeNode* node, int(*compare)(const void*, const void*), BTree* tree) {
+    if (node->ParentNode->ParentNode != NULL) {
+        int meaning = compare(node->ParentNode->ParentNode->Item->key, node->Item->key);
         if (meaning <= 0) {
-            node->ParentNode->RightNode = node->RightNode;
+            node->ParentNode->ParentNode->RightNode = node;
         }
         else {
-            node->ParentNode->LeftNode = node->RightNode;
+            node->ParentNode->ParentNode->LeftNode = node;
         };
-        node->RightNode->ParentNode = node->ParentNode;
+        node->ParentNode = node->ParentNode->ParentNode;
     }
     else {
-        tree->root = node->RightNode;
-        node->RightNode->ParentNode = NULL;
-    }
-}
-
-static void decoupling_node_path_left(BTreeNode* node, int(*compare)(const void*, const void*), BTree* tree) {
-    if (node->ParentNode != NULL) {
-        int meaning = compare(node->ParentNode->Item->key, node->Item->key);
-        if (meaning <= 0) {
-            node->ParentNode->RightNode = node->LeftNode;
-        }
-        else {
-            node->ParentNode->LeftNode = node->LeftNode;
-        };
-        node->LeftNode->ParentNode = node->ParentNode;
-    }
-    else {
-        tree->root = node->LeftNode;
-        node->LeftNode->ParentNode = NULL;
+        tree->root = node;
+        node->ParentNode = NULL;
     }
 }
 
 static void node_remove(BTreeNode* node, int(*compare)(const void*, const void*), void(*destroy)(void*), BTree* tree) {
     if ((node->LeftNode == NULL) && (node->RightNode == NULL)) {
-        decoupling_sheet(node, compare);
+        decoupling_leaf(node, compare);
         delete_node(node, destroy);
     }
     else if ((node->LeftNode == NULL) && (node->RightNode != NULL)) {
-        decoupling_node_path_right(node, compare, tree);
+        decoupling_node_path(node->RightNode, compare, tree);
         delete_node(node, destroy);
     }
     else if ((node->LeftNode != NULL) && (node->RightNode == NULL)) {
-        decoupling_node_path_left(node, compare, tree);
+        decoupling_node_path(node->LeftNode, compare, tree);
         delete_node(node, destroy);
     }
     else if ((node->LeftNode != NULL) && (node->RightNode != NULL)) {
-        BTreeNode* left_root = leftmostNode(node->RightNode);
+        BTreeNode* left_root = leftmost_node(node->RightNode);
         if (destroy != NULL) {
             destroy(node->Item);
         }
-        memcpy(node->Item->key, left_root->Item->key, tree->keySize);
+        memcpy((void*)node->Item->key, left_root->Item->key, tree->keySize);
         memcpy(node->Item->value, left_root->Item->value, tree->valueSize);
         node_remove(left_root, compare, NULL, tree);
     }
 }
 
-
-static void delete_all_nodes(void* _node, void(*destroy)(void*)) {
-    if (_node == NULL) {
-        return;
-    }
-    BTreeNode* node = _node;
+static void delete_all_nodes(BTreeNode* node, void(*destroy)(void*)) {
+    if (node == NULL) return;
     if (node->LeftNode != NULL) {
         BTreeNode* left_node = (BTreeNode*)node->LeftNode;
         left_node->ParentNode = NULL;
@@ -212,7 +169,17 @@ static void delete_all_nodes(void* _node, void(*destroy)(void*)) {
     delete_node(node, destroy);
 }
 
-
+static size_t traversal_by_perents(BTreeNode* node, BTree* tree, bool inversion_enabled) {
+    BTreeNode* parent_node = node->ParentNode;
+    while (parent_node)
+    {
+        if ((tree->comp(node->Item->key, parent_node->Item->key) < 0) ^ inversion_enabled) {
+            return (size_t)parent_node;
+        }
+        parent_node = parent_node->ParentNode;
+    }
+    return (size_t)NULL;
+}
 
 
 void* btree_create(size_t keySize, size_t valueSize, int(*compare)(const void*, const void*)){
@@ -244,7 +211,6 @@ void btree_destroy(void* btree, void(*destroy)(void*)) {
 
 void* btree_init(void* btree, size_t keySize, size_t valueSize, int(*compare)(const void*, const void*), void(*destroy)(void*)) {
     if ((keySize == 0) || (valueSize == 0) || (compare == NULL) || (btree == NULL)) {
-        btree_destroy(btree, destroy);
         return NULL;
     }
     BTree* tree = (BTree*)btree;
@@ -319,26 +285,26 @@ void* btree_insert(void* btree, const void* key, bool* createFlag){
         return node->Item->value;
     }
     else {
-        BTreeNode* sheet = NULL;
+        BTreeNode* leaf = NULL;
         int route = tree->comp(node->Item->key, key);
 
         if (route > 0) {
             node->LeftNode = build_node(tree, key);
-            sheet = (BTreeNode*)node->LeftNode;
+            leaf = (BTreeNode*)node->LeftNode;
         }
 
         else if (route < 0) {
             node->RightNode = build_node(tree, key);
-            sheet = (BTreeNode*)node->RightNode;
+            leaf = (BTreeNode*)node->RightNode;
         }
 
-        if (sheet == NULL) {
+        if (leaf == NULL) {
             return NULL;
         }
         tree->size++;
-        sheet->ParentNode = node;
+        leaf->ParentNode = node;
         *createFlag = true;
-        return sheet->Item->value;
+        return leaf->Item->value;
     }
 }
 
@@ -373,7 +339,7 @@ size_t btree_first(const void* btree) {
     if (tree->root == NULL) {
         return btree_stop(btree);
     }
-    return (size_t)leftmostNode(tree->root);
+    return (size_t)leftmost_node(tree->root);
 }
 
 size_t btree_last(const void* btree) {
@@ -384,31 +350,23 @@ size_t btree_last(const void* btree) {
     if (tree->root == NULL) {
         return btree_stop(btree);
     }
-    return (size_t)rightmostNode(tree->root);
+    return (size_t)rightmost_node(tree->root);
 }
 
 size_t btree_next(const void* btree, size_t item_id) {
     if ((btree == NULL) || (item_id == 0)) {
         return btree_stop(btree);
     }
-
     BTree* tree = (BTree*)btree;
     BTreeNode* node = (BTreeNode*)item_id;
-
     if (node->RightNode != NULL) {
-        return (size_t)leftmostNode(node->RightNode);
+        return (size_t)leftmost_node(node->RightNode);
     }
     else if (node->ParentNode != NULL) {
-        BTreeNode* parent_node = node->ParentNode;
-        while (parent_node)
-        {
-            if (tree->comp(node->Item->key, parent_node->Item->key) < 0) {
-                return (size_t)parent_node;
-            }
-            parent_node = parent_node->ParentNode;
-        }
+        size_t temp = traversal_by_perents(node, tree, false);
+        if (temp != (size_t)NULL) return temp;
     }
-    return btree_stop(btree);
+    return btree_stop(tree);
 }
 
 size_t btree_prev(const void* btree, size_t item_id) {
@@ -421,17 +379,11 @@ size_t btree_prev(const void* btree, size_t item_id) {
 
 
     if (node->LeftNode != NULL) {
-        return (size_t)rightmostNode(node->LeftNode);
+        return (size_t)rightmost_node(node->LeftNode);
     }
     else if (node->ParentNode != NULL) {
-        BTreeNode* parent_node = node->ParentNode;
-        while (parent_node)
-        {
-            if (tree->comp(node->Item->key, parent_node->Item->key) > 0) {
-                return (size_t)parent_node;
-            }
-            parent_node = parent_node->ParentNode;
-        }
+        size_t temp = traversal_by_perents(node, tree, true);
+        if (temp != (size_t)NULL) return temp;
     }
     return btree_stop(btree);
 }
