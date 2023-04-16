@@ -1,12 +1,15 @@
 #include "pch.h"
+#include <random>
 
-#include <assert.h>
-#include <stdlib.h>
+//#include <assert.h>
+//#include <stdlib.h>
 
 extern "C"
 {
 #include "btree.h"
 }
+
+//----------------------------------------------------------//
 
 typedef struct {
     int array[8];
@@ -19,27 +22,20 @@ typedef struct {
 
 
 static int compare(const void* lhsp, const void* rhsp) {
-    const Key* lhs = (const Key*)lhsp;
-    const Key* rhs = (const Key*)rhsp;
-
+    const auto lhs = static_cast<const Key*>(lhsp);
+    const auto rhs = static_cast<const Key*>(rhsp);
     return strcmp(lhs->name, rhs->name);
 }
 
+//----------------------------------------------------------//
+
 static int compare_int(const void* a, const void* b) {
-    int* arg1 = (int*)a;
-    int* arg2 = (int*)b;
-    if (*arg1 > *arg2) {
-        return 1;
-    }
-    else if (*arg1 == *arg2) {
-        return 0;
-    }
-    else {
-        return -1;
-    }
-    //return *arg1 > *arg2 ? 1 : *arg1 == *arg2 ? 0 : -1;
+    const auto arg1 = static_cast<const int*>(a);
+    const auto arg2 = static_cast<const int*>(b);
+    return *arg1 > *arg2 ? 1 : *arg1 == *arg2 ? 0 : -1;
 }
 
+//----------------------------------------------------------//
 
 typedef struct _KeyMy
 {
@@ -51,15 +47,15 @@ typedef struct _ValueMy
     int* array;
 } ValueMy;
 
+
 void build_key(KeyMy* key) {
-    key->name = (char*)malloc(sizeof(char) * 10);
+    key->name = static_cast<char*>(malloc(sizeof(char) * 10));
 }
 
-void init_key(KeyMy* key, int index) {
+void init_key(KeyMy* key, const int index) {
     build_key(key);
     std::string str;
     str.append("Key" + std::to_string(index));
-
 
     for (int i = 0; i < 10; i++) {
         if (i < str.size()) {
@@ -71,37 +67,41 @@ void init_key(KeyMy* key, int index) {
     }
 }
 
-void free_key(KeyMy* key) {
+void free_key(const KeyMy* key) {
     free(key->name);
 }
 
 void build_value(ValueMy* value) {
-    value->array = (int*)malloc(sizeof(int) * 10);
+    value->array = static_cast<int*>(malloc(sizeof(int) * 10));
 }
 
 void init_value(ValueMy* value) {
+    std::random_device dev;
+    std::mt19937 rng(dev());
+    std::uniform_int_distribution<std::mt19937::result_type> rnd_value(0, 100);
     build_value(value);
     for (int i = 0; i < 10; i++) {
-        value->array[i] = rand() % 100;
+        value->array[i] = static_cast<int>(rnd_value(rng));
     }
 }
 
-void free_value(ValueMy* value) {
+void free_value(const ValueMy* value) {
     free(value->array);
 }
 
 void destroy(void* _item) {
-    BTreeItem* item = (BTreeItem*)_item;
-    free_key((KeyMy*)item->key);
-    free_value((ValueMy*)item->value);
+    const BTreeItem* item = static_cast<BTreeItem*>(_item);
+    free_key(static_cast<const KeyMy*>(item->key));
+    free_value(static_cast<const ValueMy*>(item->value));
 }
 
 static int compare_(const void* lhsp, const void* rhsp) {
-    const KeyMy* lhs = (const KeyMy*)lhsp;
-    const KeyMy* rhs = (const KeyMy*)rhsp;
-
+    const auto lhs = static_cast<const KeyMy*>(lhsp);
+    const auto rhs = static_cast<const KeyMy*>(rhsp);
     return strcmp(lhs->name, rhs->name);
 }
+
+//----------------------------------------------------------//
 
 TEST(TestExample, Test) {
 
