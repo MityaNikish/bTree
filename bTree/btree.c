@@ -71,7 +71,9 @@ static BTreeNode* traversal_tree(BTreeNode* node, const void* key, int(*compare)
 }
 
 static void delete_node(BTreeNode* node, void(*destroy)(void*)) {
-    if (node == NULL) return;
+    if (node == NULL) {
+        return;
+    }
     if (destroy != NULL) {
         destroy(node->item);
     }
@@ -82,7 +84,9 @@ static void delete_node(BTreeNode* node, void(*destroy)(void*)) {
 }
 
 static BTreeNode* leftmost_node(BTreeNode*  node) {
-    if (node == NULL) return NULL;
+    if (node == NULL) {
+        return NULL;
+    }
     while (node->left_node != NULL) {
         node = node->left_node;
     }
@@ -90,7 +94,9 @@ static BTreeNode* leftmost_node(BTreeNode*  node) {
 }
 
 static BTreeNode* rightmost_node(BTreeNode* node) {
-    if (node == NULL) return NULL;
+    if (node == NULL) {
+        return NULL;
+    }
     while(node->right_node != NULL) {
         node = node->right_node;
     }
@@ -151,7 +157,9 @@ static void node_remove(BTreeNode* node, int(*compare)(const void*, const void*)
 }
 
 static void delete_all_nodes(BTreeNode* node, void(*destroy)(void*)) {
-    if (node == NULL) return;
+    if (node == NULL) {
+        return;
+    }
     if (node->left_node != NULL) {
         BTreeNode* left_node = node->left_node;
         left_node->parent_node = NULL;
@@ -167,34 +175,52 @@ static void delete_all_nodes(BTreeNode* node, void(*destroy)(void*)) {
     delete_node(node, destroy);
 }
 
-static size_t traversal_by_parents(const BTreeNode* node, const BTree* tree, const bool inversion_enabled) {
-    BTreeNode* parent_node = node->parent_node;
-    while (parent_node)
-    {
-        if ((tree->comp(node->item->key, parent_node->item->key) < 0) ^ inversion_enabled) {
-            return (size_t)parent_node;
-        }
-        parent_node = parent_node->parent_node;
+static bool functor_next(size_t* item_id) {
+    const BTreeNode* node = (const BTreeNode*)*item_id;
+    if (node->right_node != NULL) {
+        *item_id = (size_t)leftmost_node(node->right_node);
+        return true;
     }
-    return (size_t)NULL;
+    return false;
 }
 
-static size_t btree_next_prev(const BTree* tree, const size_t item_id, const bool next_enable) {
+static bool functor_prev(size_t* item_id) {
+    const BTreeNode* node = (const BTreeNode*)*item_id;
+    if (node->left_node != NULL) {
+        *item_id = (size_t)rightmost_node(node->left_node);
+        return true;
+    }
+    return false;
+}
+
+static bool key_less(const void* first_key, const void* second_key, int(*compare)(const void*, const void*)) {
+    return compare(first_key, second_key) < 0;
+}
+
+static bool key_more(const void* first_key, const void* second_key, int(*compare)(const void*, const void*)) {
+    return compare(first_key, second_key) > 0;
+}
+
+static size_t manager_neighbors(const BTree* tree, const size_t item_id, bool(*functor)(size_t*), bool (*rule)(const void*, const void*, int(*)(const void*, const void*))) {
     if ((tree == NULL) || (item_id == 0)) {
         return btree_stop(tree);
     }
+
+    if (functor(&item_id)) {
+        return item_id;
+    }
+
     const BTreeNode* node = (const BTreeNode*)item_id;
 
-    if (next_enable && (node->right_node != NULL)) {
-        return (size_t)leftmost_node(node->right_node);
-    }
-    if (!next_enable && (node->left_node != NULL)) {
-        return (size_t)rightmost_node(node->left_node);
-    }
-
     if (node->parent_node != NULL) {
-        const size_t temp = traversal_by_parents(node, tree, !next_enable);
-        if (temp != (size_t)NULL) return temp;
+        BTreeNode* parent_node = node->parent_node;
+        while (parent_node)
+        {
+            if (rule(node->item->key, parent_node->item->key, tree->comp)) {
+                return (size_t)parent_node;
+            }
+            parent_node = parent_node->parent_node;
+        }
     }
     return btree_stop(tree);
 }
@@ -363,11 +389,11 @@ size_t btree_last(const void* btree) {
 }
 
 size_t btree_next(const void* btree, size_t item_id) {
-    return btree_next_prev(btree, item_id, true);
+    return manager_neighbors(btree, item_id, functor_next, key_less);
 }
 
 size_t btree_prev(const void* btree, size_t item_id) {
-    return btree_next_prev(btree, item_id, false);
+    return manager_neighbors(btree, item_id, functor_prev, key_more);
 }
 
 size_t btree_stop(const void* btree) {

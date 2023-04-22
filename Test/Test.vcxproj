@@ -52,12 +52,12 @@
     <None Include="packages.config" />
   </ItemGroup>
   <ItemGroup>
+    <Text Include="result.txt" />
+  </ItemGroup>
+  <ItemGroup>
     <ProjectReference Include="..\bTree\bTree.vcxproj">
       <Project>{5b32e4bb-4475-49a8-855a-7dea4f8924c8}</Project>
     </ProjectReference>
-  </ItemGroup>
-  <ItemGroup>
-    <Text Include="result.txt" />
   </ItemGroup>
   <ItemDefinitionGroup />
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
