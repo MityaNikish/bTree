@@ -201,7 +201,7 @@ static bool key_more(const void* first_key, const void* second_key, int(*compare
     return compare(first_key, second_key) > 0;
 }
 
-static size_t manager_neighbors(const BTree* tree, const size_t item_id, bool(*functor)(size_t*), bool (*rule)(const void*, const void*, int(*)(const void*, const void*))) {
+static size_t manager_neighbors(const BTree* tree, size_t item_id, bool(*functor)(size_t*), bool (*rule)(const void*, const void*, int(*)(const void*, const void*))) {
     if ((tree == NULL) || (item_id == 0)) {
         return btree_stop(tree);
     }
@@ -405,7 +405,6 @@ void* btree_current(const void* btree, size_t item_id)
     if ((item_id == 0) || (btree == NULL)) {
         return NULL;
     }
-    const BTree* tree = btree;
     const BTreeNode* node = (const BTreeNode*)item_id;
     if (btree_item(btree, node->item->key) != NULL) {
         return node->item;
@@ -417,7 +416,6 @@ void btree_erase(void* btree, size_t item_id, void(*destroy)(void*)) {
     if ((btree == NULL) || (item_id == 0)) {
         return;
     }
-    BTree* tree = btree;
     const BTreeNode* node = (const BTreeNode*)item_id;
     btree_remove(btree, node->item->key, destroy);
 }
